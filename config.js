@@ -15,7 +15,7 @@ window.CONFIG = {
   // "Routes API" enabled. Without a key the card shows a button that opens
   // live traffic in Google Maps.
   home: "3790 E Kingbird Pl, Chandler, AZ 85286",
-  work: "Sandeep Aqua Sap, Scottsdale, AZ",
+  work: "Sawadee Aqua Spa, 15227 N 87th St Ste 105, Scottsdale, AZ 85260",
   googleMapsApiKey: "",
   refreshMinutes: 5,
 };
