@@ -14,7 +14,7 @@ window.CONFIG = {
   // Traffic. Live drive time needs a Google Maps API key with the
   // "Routes API" enabled. Without a key the card shows a button that opens
   // live traffic in Google Maps.
-  home: "123 Main St, Austin, TX",
+  home: "3790 E Kingbird Pl, Chandler, AZ 85286",
   work: "Sandeep Aqua Sap, Scottsdale, AZ",
   googleMapsApiKey: "",
   refreshMinutes: 5,
