@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Family Dashboard</title>
+<style>
+  :root{--bg:#0f172a;--card:#1e293b;--text:#f1f5f9;--muted:#94a3b8;--ok:#4ade80;--warn:#fbbf24;--bad:#f87171;--accent:#38bdf8}
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100vh;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;padding:16px}
+  .grid{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));max-width:1200px;margin:0 auto}
+  .card{background:var(--card);border-radius:20px;padding:24px}
+  .card h2{margin:0 0 12px;font-size:.9rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+  .big{font-size:clamp(2.5rem,8vw,5rem);font-weight:700;line-height:1}
+  .mid{font-size:2rem;font-weight:600}
+  .muted{color:var(--muted)}
+  .wide{grid-column:1/-1}
+  .clock{text-align:center}
+  .clock .date{font-size:1.4rem;color:var(--muted);margin-top:8px}
+  .wx-row{display:flex;align-items:center;gap:16px}
+  .wx-icon{font-size:4rem}
+  .forecast{display:flex;gap:12px;margin-top:16px;overflow-x:auto}
+  .forecast div{text-align:center;min-width:56px;font-size:.9rem}
+  .ok{color:var(--ok)}.warn{color:var(--warn)}.bad{color:var(--bad)}
+  a.btn{display:inline-block;margin-top:12px;padding:10px 16px;border-radius:12px;background:var(--accent);color:#0f172a;font-weight:600;text-decoration:none}
+  .countdown{text-align:center}
+  .countdown .big{font-variant-numeric:tabular-nums}
+</style>
+</head>
+<body>
+<div class="grid">
+  <div class="card clock wide">
+    <div class="big" id="time">--:--</div>
+    <div class="date" id="date"></div>
+  </div>
+
+  <div class="card countdown">
+    <h2 id="cd-label">Arrive at work by</h2>
+    <div class="big" id="cd">--:--:--</div>
+    <div class="muted" id="cd-sub"></div>
+    <div class="mid" id="leave" style="margin-top:12px"></div>
+  </div>
+
+  <div class="card">
+    <h2>Traffic to work</h2>
+    <div id="traffic" class="muted">Loading…</div>
+  </div>
+
+  <div class="card wide">
+    <h2 id="wx-title">Weather</h2>
+    <div id="weather" class="muted">Loading…</div>
+  </div>
+</div>
+
+<script src="config.js"></script>
+<script>
+const C = window.CONFIG;
+const $ = id => document.getElementById(id);
+const pad = n => String(n).padStart(2, "0");
+let trafficMinutes = null; // latest drive time with traffic
+
+// ---------- Clock ----------
+function tickClock() {
+  const now = new Date();
+  $("time").textContent = now.toLocaleTimeString([], {hour: "numeric", minute: "2-digit"});
+  $("date").textContent = now.toLocaleDateString([], {weekday: "long", month: "long", day: "numeric", year: "numeric"});
+}
+
+// ---------- Countdown ----------
+function nextDeadline(now) {
+  for (let i = 0; i < 8; i++) {
+    const d = new Date(now);
+    d.setDate(d.getDate() + i);
+    d.setHours(C.arriveBy.hour, C.arriveBy.minute, 0, 0);
+    if (d > now && C.workDays.includes(d.getDay())) return d;
+  }
+}
+function tickCountdown() {
+  const now = new Date();
+  const target = nextDeadline(now);
+  const label = target.toLocaleTimeString([], {hour: "numeric", minute: "2-digit"});
+  const isToday = target.toDateString() === now.toDateString();
+  $("cd-label").textContent = `Arrive at work by ${label}` + (isToday ? "" : ` · ${target.toLocaleDateString([], {weekday: "long"})}`);
+  let s = Math.floor((target - now) / 1000);
+  const days = Math.floor(s / 86400); s %= 86400;
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+  $("cd").textContent = (days ? `${days}d ` : "") + `${pad(h)}:${pad(m)}:${pad(sec)}`;
+  $("cd-sub").textContent = "until you need to be there";
+
+  const leaveEl = $("leave");
+  if (isToday && trafficMinutes != null) {
+    const leaveAt = new Date(target - trafficMinutes * 60000);
+    const minsLeft = Math.round((leaveAt - now) / 60000);
+    leaveEl.textContent = minsLeft > 0
+      ? `Leave by ${leaveAt.toLocaleTimeString([], {hour: "numeric", minute: "2-digit"})} (${minsLeft} min)`
+      : "Time to go! 🚗";
+    leaveEl.className = "mid " + (minsLeft > 15 ? "ok" : minsLeft > 0 ? "warn" : "bad");
+  } else {
+    leaveEl.textContent = "";
+  }
+}
+
+// ---------- Weather (Open-Meteo) ----------
+const WMO = {0:["Clear","☀️"],1:["Mostly clear","🌤️"],2:["Partly cloudy","⛅"],3:["Overcast","☁️"],45:["Fog","🌫️"],48:["Fog","🌫️"],
+  51:["Light drizzle","🌦️"],53:["Drizzle","🌦️"],55:["Heavy drizzle","🌧️"],61:["Light rain","🌦️"],63:["Rain","🌧️"],65:["Heavy rain","🌧️"],
+  71:["Light snow","🌨️"],73:["Snow","❄️"],75:["Heavy snow","❄️"],80:["Showers","🌦️"],81:["Showers","🌧️"],82:["Heavy showers","⛈️"],
+  95:["Thunderstorm","⛈️"],96:["Thunderstorm, hail","⛈️"],99:["Thunderstorm, hail","⛈️"]};
+const wmo = c => WMO[c] || ["—","❔"];
+
+async function resolveLocation() {
+  if (C.lat != null && C.lon != null) return {lat: C.lat, lon: C.lon, name: C.city || "Your location"};
+  const r = await fetch(`https://geocoding-api.open-meteo.com/v1/search?count=1&name=${encodeURIComponent(C.city.split(",")[0])}`);
+  const j = await r.json();
+  if (!j.results?.length) throw new Error("City not found");
+  const g = j.results[0];
+  return {lat: g.latitude, lon: g.longitude, name: `${g.name}${g.admin1 ? ", " + g.admin1 : ""}`};
+}
+async function loadWeather() {
+  try {
+    const loc = await resolveLocation();
+    const unit = C.units === "celsius" ? "celsius" : "fahrenheit";
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${loc.lat}&longitude=${loc.lon}`
+      + `&current=temperature_2m,apparent_temperature,weather_code,wind_speed_10m,precipitation`
+      + `&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max`
+      + `&temperature_unit=${unit}&wind_speed_unit=${unit === "celsius" ? "kmh" : "mph"}&timezone=auto&forecast_days=5`;
+    const j = await (await fetch(url)).json();
+    const cur = j.current, [desc, icon] = wmo(cur.weather_code), deg = unit === "celsius" ? "°C" : "°F";
+    $("wx-title").textContent = `Weather · ${loc.name}`;
+    const days = j.daily.time.map((t, i) => {
+      const [, ic] = wmo(j.daily.weather_code[i]);
+      const dn = new Date(t + "T12:00").toLocaleDateString([], {weekday: "short"});
+      return `<div><div>${dn}</div><div style="font-size:1.6rem">${ic}</div>
+        <div>${Math.round(j.daily.temperature_2m_max[i])}°</div>
+        <div class="muted">${Math.round(j.daily.temperature_2m_min[i])}°</div>
+        <div class="muted">💧${j.daily.precipitation_probability_max[i] ?? 0}%</div></div>`;
+    }).join("");
+    $("weather").className = "";
+    $("weather").innerHTML = `
+      <div class="wx-row"><div class="wx-icon">${icon}</div>
+        <div><div class="big">${Math.round(cur.temperature_2m)}${deg}</div>
+        <div class="muted">${desc} · feels like ${Math.round(cur.apparent_temperature)}° · wind ${Math.round(cur.wind_speed_10m)}</div></div></div>
+      <div class="forecast">${days}</div>`;
+  } catch (e) {
+    $("weather").textContent = "Weather unavailable: " + e.message;
+  }
+}
+
+// ---------- Traffic ----------
+function mapsLink() {
+  return `https://www.google.com/maps/dir/?api=1&travelmode=driving&origin=${encodeURIComponent(C.home)}&destination=${encodeURIComponent(C.work)}`;
+}
+async function loadTraffic() {
+  const el = $("traffic");
+  if (!C.googleMapsApiKey) {
+    el.innerHTML = `Add a Google Maps API key in <code>config.js</code> for live drive times.<br><a class="btn" href="${mapsLink()}" target="_blank" rel="noopener">Open live traffic ↗</a>`;
+    return;
+  }
+  try {
+    const r = await fetch("https://routes.googleapis.com/directions/v2:computeRoutes", {
+      method: "POST",
+      headers: {"Content-Type": "application/json", "X-Goog-Api-Key": C.googleMapsApiKey,
+        "X-Goog-FieldMask": "routes.duration,routes.staticDuration,routes.distanceMeters"},
+      body: JSON.stringify({origin: {address: C.home}, destination: {address: C.work},
+        travelMode: "DRIVE", routingPreference: "TRAFFIC_AWARE"})
+    });
+    const j = await r.json();
+    if (!j.routes?.length) throw new Error(j.error?.message || "No route");
+    const rt = j.routes[0], secs = parseInt(rt.duration), base = parseInt(rt.staticDuration);
+    trafficMinutes = Math.round(secs / 60);
+    const delay = Math.round((secs - base) / 60);
+    const cls = delay <= 3 ? "ok" : delay <= 10 ? "warn" : "bad";
+    const label = delay <= 3 ? "Light traffic" : delay <= 10 ? "Moderate traffic" : "Heavy traffic";
+    el.className = "";
+    el.innerHTML = `<div class="big ${cls}">${trafficMinutes} min</div>
+      <div class="${cls}" style="margin-top:8px">${label}${delay > 0 ? ` · +${delay} min` : ""}</div>
+      <div class="muted">${(rt.distanceMeters / 1609.34).toFixed(1)} mi</div>
+      <a class="btn" href="${mapsLink()}" target="_blank" rel="noopener">Open map ↗</a>`;
+  } catch (e) {
+    el.innerHTML = `Traffic unavailable: ${e.message}<br><a class="btn" href="${mapsLink()}" target="_blank" rel="noopener">Open live traffic ↗</a>`;
+  }
+}
+
+tickClock(); tickCountdown();
+setInterval(() => { tickClock(); tickCountdown(); }, 1000);
+loadWeather(); loadTraffic();
+setInterval(() => { loadWeather(); loadTraffic(); }, C.refreshMinutes * 60000);
+</script>
+</body>
+</html>
