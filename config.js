@@ -2,7 +2,7 @@
 window.CONFIG = {
   title: "Good day!",
   // Weather (Open-Meteo, no API key needed). Use a city name OR set lat/lon.
-  city: "Austin, TX",
+  city: "Scottsdale, AZ",
   lat: null,
   lon: null,
   units: "fahrenheit", // "fahrenheit" or "celsius"
@@ -15,7 +15,7 @@ window.CONFIG = {
   // "Routes API" enabled. Without a key the card shows a button that opens
   // live traffic in Google Maps.
   home: "123 Main St, Austin, TX",
-  work: "456 Office Blvd, Austin, TX",
+  work: "Sandeep Aqua Sap, Scottsdale, AZ",
   googleMapsApiKey: "",
   refreshMinutes: 5,
 };
