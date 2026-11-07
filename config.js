@@ -2,7 +2,7 @@
 window.CONFIG = {
   title: "Good day!",
   // Weather (Open-Meteo, no API key needed). Use a city name OR set lat/lon.
-  city: "Scottsdale, AZ",
+  city: "Chandler, AZ",
   lat: null,
   lon: null,
   units: "fahrenheit", // "fahrenheit" or "celsius"
